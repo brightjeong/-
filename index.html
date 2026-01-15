@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>태극도 달력</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
+    
+    <meta name="theme-color" content="#003366">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/korean-lunar-calendar/dist/korean-lunar-calendar.min.js"></script>
+    
+    <style>
+        /* 1. 기본 스타일 */
+        body { 
+            font-family: 'Gowun Dodum', sans-serif; 
+            background-color: #f7f8fa; 
+            margin: 0; padding: 10px; 
+            user-select: none; 
+            padding-bottom: 30px; /* 하단 여백 약간 */
+        }
+        
+        .calendar-app { 
+            background: white; border-radius: 15px; 
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05); 
+            width: 100%; max-width: 480px; 
+            margin: 0 auto; overflow: hidden; position: relative; 
+            box-sizing: border-box; 
+        }
+        
+        /* 헤더 */
+        .header { background-color: #003366; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { margin: 0; font-size: 20px; font-weight: bold; font-family: 'Gowun Dodum'; }
+        .btn-nav { background: rgba(255,255,255,0.2); border: none; color: white; padding: 5px 12px; border-radius: 10px; cursor: pointer; font-size: 16px;}
+
+        /* 요일 */
+        .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-weight: bold; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; background-color: #fff8e1; }
+        .weekdays div:nth-child(1) { color: #d32f2f; }
+        .weekdays div:nth-child(7) { color: #1976d2; }
+
+        /* 날짜 그리드 (모양 깨짐 방지 적용됨) */
+        .days { 
+            display: grid; 
+            grid-template-columns: repeat(7, minmax(0, 1fr)); /* 칸 크기 고정 */
+            background-color: #eee; gap: 1px; border: 1px solid #eee; 
+        }
+        .day-cell { 
+            background-color: white;
+            min-height: 85px; 
+            padding: 2px; position: relative; 
+            cursor: pointer; 
+            display: flex; flex-direction: column; align-items: center;
+            overflow: hidden;
+        }
+        .day-cell:active { background-color: #f5f5f5; }
+
+        .solar-num { 
+            font-size: 16px; font-weight: bold; color: #333; 
+            margin-top: 18px; margin-bottom: 2px; z-index: 1;
+        }
+        .day-cell:nth-child(7n+1) .solar-num { color: #d32f2f; }
+        .day-cell:nth-child(7n) .solar-num { color: #1976d2; }
+
+        /* 태/기 & 반 표시 */
+        .mark-tae-gi { position: absolute; top: 4px; left: 4px; font-size: 11px; font-weight: bold; }
+        .is-tae { color: #003366; }
+        .is-gi { color: #999; }
+        .mark-ban { position: absolute; top: 5px; left: 20px; font-size: 10px; color: #777; font-weight: bold; }
+
+        /* 하단 정보 */
+        .bottom-info { text-align: center; width: 100%; overflow: hidden; }
+        .lunar-text { font-size: 9px; color: #888; letter-spacing: -0.5px; margin-bottom: 1px; display: block; white-space: nowrap; }
+        .juil-text { display: block; font-size: 9px; color: #7b1fa2; font-weight: 900; margin-top: -1px; }
+
+        /* 행사 표시 */
+        .event-row { display: flex; align-items: center; justify-content: center; margin-top: 2px; gap: 2px; width: 100%; }
+        .taegeuk-icon { 
+            width: 12px; height: 12px; border-radius: 50%; position: relative; flex-shrink: 0;
+            background: linear-gradient(180deg, #c62828 50%, #1565c0 50%); 
+            display: inline-block; border: 0.5px solid rgba(0,0,0,0.1);
+        }
+        .taegeuk-icon::before { content: ''; position: absolute; top: 50%; right: 0; width: 50%; height: 50%; background: #1565c0; border-radius: 50%; transform: translateY(-50%); }
+        .taegeuk-icon::after { content: ''; position: absolute; top: 50%; left: 0; width: 50%; height: 50%; background: #c62828; border-radius: 50%; transform: translateY(-50%); }
+        
+        .event-text { 
+            font-size: 10px; font-weight: bold; color: #1565c0; letter-spacing: -0.5px; 
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%;
+        }
+        .event-chi { color: #c62828; }
+
+        .today { background-color: #e3f2fd; border: 1.5px solid #2196f3; z-index: 2; }
+
+        /* 메모 미리보기 스타일 */
+        .memo-preview {
+            font-size: 10px; color: #5d4037;
+            background-color: rgba(255, 245, 157, 0.4); 
+            border: 1px solid rgba(255, 241, 118, 0.5);
+            border-radius: 4px; padding: 2px 4px; margin-top: 3px;
+            width: 90%; margin-left: auto; margin-right: auto;
+            text-align: center; line-height: 1.2; font-weight: bold;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+        }
+        .repeat-icon { font-size: 8px; color: #ef5350; vertical-align: top; margin-right: 2px; }
+
+        /* 팝업 디자인 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 90%; max-width: 350px; border-radius: 15px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #efebe9; padding-bottom: 10px; margin-bottom: 15px; }
+        .modal-date { font-size: 20px; font-weight: 900; color: #3e2723; font-family: 'Gowun Batang'; }
+        .back-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #5d4037; font-weight: bold; }
+        
+        .section-title { font-size: 14px; font-weight: 900; color: #5d4037; margin: 10px 0 5px 0; display: block; font-family: 'Gowun Dodum'; }
+        
+        .title-input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Gowun Dodum'; font-size: 16px; font-weight: bold; box-sizing: border-box; margin-bottom: 5px; }
+        .day-memo-input { width: 100%; height: 150px; padding: 15px; border: 1px dashed #ccc; border-radius: 8px; font-family: 'Gowun Batang'; font-size: 15px; line-height: 1.6; background: #fffdeb; resize: none; box-sizing: border-box; color: #3e2723; }
+        .repeat-select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 8px; font-family: 'Gowun Dodum'; font-size: 14px; background: #f9f9f9; margin-bottom: 10px; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+        .btn { padding: 12px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; flex: 1; font-family: 'Gowun Dodum'; font-size: 15px; }
+        .btn-save { background-color: #5d4037; color: white; }
+        .btn-close { background-color: #bdbdbd; color: white; }
+        .btn-delete { background-color: #ef5350; color: white; flex: 0.5; }
+    </style>
+</head>
+<body>
+
+    <div class="calendar-app">
+        <div class="header">
+            <button class="btn-nav" onclick="moveMonth(-1)">&#10094;</button>
+            <h1 id="yearMonthTitle">Loading...</h1>
+            <button class="btn-nav" onclick="moveMonth(1)">&#10095;</button>
+        </div>
+        <div class="weekdays">
+            <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+        </div>
+        <div class="days" id="calendarGrid"></div>
+    </div>
+
+    <div id="memoModal" class="modal-overlay" onclick="if(event.target===this) closeModal()">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div style="width:24px;"></div>
+                <div id="modalDate" class="modal-date">날짜</div>
+                <button class="back-btn" onclick="closeModal()">×</button>
+            </div>
+            
+            <div style="flex-grow: 1;">
+                <span class="section-title">📌 제목 (달력에 표시됨)</span>
+                <input type="text" id="memoTitle" class="title-input" placeholder="예: 할아버지 제사, 모임">
+
+                <span class="section-title">🔄 반복 설정 (매년)</span>
+                <select id="memoRepeat" class="repeat-select">
+                    <option value="none">반복 없음 (한 번만)</option>
+                    <option value="solar">양력 반복 (매년 같은 날짜)</option>
+                    <option value="lunar">음력 반복 (매년 같은 음력일)</option>
+                </select>
+
+                <span class="section-title">📝 상세 내용 (클릭 시 보임)</span>
+                <textarea id="memoContent" class="day-memo-input" placeholder="상세한 일정이나 일기를 기록하세요."></textarea>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-close" onclick="closeModal()">닫기</button>
+                <button class="btn btn-delete" onclick="deleteMemo()">삭제</button>
+                <button class="btn btn-save" onclick="saveMemo()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function() { initCalendar(); };
+
+        const now = new Date();
+        let currentYear = now.getFullYear();
+        let currentMonth = now.getMonth() + 1;
+        let lunarConverter;
+        let selectedDateKey = ""; 
+        let recurringMemos = JSON.parse(localStorage.getItem('recurring-memos')) || [];
+
+        const cheongan = ['갑', '을', '병', '정', '무', '기', '경', '신', '임', '계'];
+        const jiji = ['자', '축', '인', '묘', '진', '사', '오', '미', '신', '유', '술', '해'];
+
+        const lunarEvents = {
+            "1-1": { name: "설치성", type: "red" },
+            "1-15": { name: "대망절", type: "blue" },
+            "2-2": { name: "능향(봄)", type: "blue" },
+            "2-10": { name: "득도절", type: "red" },
+            "3-6": { name: "옥황절", type: "red" },
+            "4-28": { name: "봉천절", type: "red" },
+            "6-24": { name: "구천절", type: "red" },
+            "8-2": { name: "능향(가을)", type: "blue" },
+            "8-15": { name: "추석치성", type: "red" },
+            "9-9": { name: "선령제향", type: "red" },
+            "9-19": { name: "무극절", type: "red" },
+            "12-4": { name: "태극절", type: "red" }
+        };
+
+        function calculateSolarEvents(year) {
+            const events = {};
+            const hajiDay = Math.floor(21.6 + 0.2422 * (year - 2000) - Math.floor((year - 2000) / 4));
+            events[`${year}-6-${hajiDay}`] = { name: "하지", type: "blue" };
+            const dongjiDay = Math.floor(22.0 + 0.2422 * (year - 2000) - Math.floor((year - 2000) / 4));
+            events[`${year}-12-${dongjiDay}`] = { name: "동지", type: "blue" };
+            const prevYear = year - 1;
+            const prevDongjiDay = Math.floor(22.0 + 0.2422 * (prevYear - 2000) - Math.floor((prevYear - 2000) / 4));
+            let searchDate = new Date(prevYear, 11, prevDongjiDay);
+            let miCount = 0;
+            for(let i=0; i<60; i++) {
+                const base = new Date(2026, 0, 1);
+                const diff = Math.floor((searchDate - base) / (1000 * 60 * 60 * 24));
+                let bIdx = (11 + diff) % 12; 
+                if (bIdx < 0) bIdx += 12;
+                if (jiji[bIdx] === '미') {
+                    miCount++;
+                    if (miCount === 3) {
+                        if (searchDate.getFullYear() === year) {
+                            const m = searchDate.getMonth() + 1;
+                            const d = searchDate.getDate();
+                            events[`${year}-${m}-${d}`] = { name: "납향", type: "blue" };
+                        }
+                        break;
+                    }
+                }
+                searchDate.setDate(searchDate.getDate() + 1);
+            }
+            return events;
+        }
+
+        function initCalendar() {
+            if (typeof KoreanLunarCalendar !== 'undefined') {
+                lunarConverter = new KoreanLunarCalendar();
+                renderCalendar();
+            }
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            document.getElementById('yearMonthTitle').innerText = `${currentYear}년 ${currentMonth}월`;
+            grid.innerHTML = "";
+
+            const firstDate = new Date(currentYear, currentMonth - 1, 1);
+            const lastDate = new Date(currentYear, currentMonth, 0);
+            const autoSolarEvents = calculateSolarEvents(currentYear);
+            const realToday = new Date();
+
+            for (let i = 0; i < firstDate.getDay(); i++) {
+                grid.innerHTML += `<div class="day-cell" style="cursor:default;"></div>`;
+            }
+
+            for (let d = 1; d <= lastDate.getDate(); d++) {
+                const targetDate = new Date(currentYear, currentMonth - 1, d);
+                
+                const baseDate = new Date(2026, 0, 1);
+                const diffTime = targetDate - baseDate;
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                let stemIndex = (1 + diffDays) % 10; if (stemIndex < 0) stemIndex += 10;
+                let branchIndex = (11 + diffDays) % 12; if (branchIndex < 0) branchIndex += 12;
+                const todayCheongan = cheongan[stemIndex];
+                const todayJiji = jiji[branchIndex];
+                let taeGiHtml = stemIndex % 2 === 0 ? `<span class="mark-tae-gi is-tae">태</span>` : `<span class="mark-tae-gi is-gi">기</span>`;
+                let banNum = (2 - 1 + diffDays) % 15; if (banNum < 0) banNum += 15; banNum += 1;
+                let banHtml = `<span class="mark-ban">${banNum}</span>`;
+                let juilText = ""; if (todayCheongan === '갑' || todayCheongan === '기') { juilText = `<span class="juil-text">주일</span>`; }
+
+                lunarConverter.setSolarDate(currentYear, currentMonth, d);
+                const lunar = lunarConverter.getLunarCalendar();
+                
+                let eventHtml = "";
+                const lunarKey = `${lunar.month}-${lunar.day}`;
+                const solarKey = `${currentYear}-${currentMonth}-${d}`;
+
+                if (lunarEvents[lunarKey]) {
+                    const evt = lunarEvents[lunarKey];
+                    const cls = evt.type === 'red' ? 'event-chi' : '';
+                    eventHtml += `<div class="event-row"><div class="taegeuk-icon"></div><span class="event-text ${cls}">${evt.name}</span></div>`;
+                }
+                if (autoSolarEvents[solarKey]) {
+                    const evt = autoSolarEvents[solarKey];
+                    const cls = evt.type === 'red' ? 'event-chi' : '';
+                    eventHtml += `<div class="event-row"><div class="taegeuk-icon"></div><span class="event-text ${cls}">${evt.name}</span></div>`;
+                }
+
+                let todayClass = "";
+                if (currentYear === realToday.getFullYear() && currentMonth === (realToday.getMonth() + 1) && d === realToday.getDate()) {
+                    todayClass = "today";
+                }
+
+                const dateKey = `${currentYear}-${currentMonth}-${d}`;
+                let displayTitle = "";
+                let hasRepeat = false;
+
+                const savedMemoStr = localStorage.getItem('memo-' + dateKey);
+                if (savedMemoStr) {
+                    try { const savedData = JSON.parse(savedMemoStr); displayTitle = savedData.title || ""; } catch(e) { displayTitle = savedMemoStr; }
+                }
+
+                const solarRepeat = recurringMemos.find(m => m.type === 'solar' && m.month == currentMonth && m.day == d);
+                if (solarRepeat) { displayTitle = solarRepeat.title; hasRepeat = true; }
+
+                const lunarRepeat = recurringMemos.find(m => m.type === 'lunar' && m.month == lunar.month && m.day == lunar.day);
+                if (lunarRepeat) { displayTitle = lunarRepeat.title; hasRepeat = true; }
+
+                let memoHtml = "";
+                if (displayTitle) {
+                    const repeatIcon = hasRepeat ? '<span class="repeat-icon">↻</span>' : '';
+                    memoHtml = `<div class="memo-preview">${repeatIcon}${displayTitle}</div>`;
+                }
+
+                const cell = document.createElement('div');
+                cell.className = `day-cell ${todayClass}`;
+                cell.onclick = function() { openModal(currentYear, currentMonth, d, lunar); };
+                
+                cell.innerHTML = `
+                    ${taeGiHtml}
+                    ${banHtml}
+                    <span class="solar-num">${d}</span>
+                    <div class="bottom-info">
+                        <span class="lunar-text">${lunar.month}/${lunar.day} ${todayCheongan}${todayJiji}</span>
+                        ${juilText}
+                    </div>
+                    ${eventHtml}
+                    ${memoHtml}
+                `;
+                grid.appendChild(cell);
+            }
+        }
+
+        function moveMonth(step) {
+            currentMonth += step;
+            if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+            else if (currentMonth < 1) { currentMonth = 12; currentYear--; }
+            renderCalendar();
+        }
+
+        function openModal(year, month, day, lunarData) {
+            selectedDateKey = `${year}-${month}-${day}`;
+            document.getElementById('modalDate').innerText = `${year}년 ${month}월 ${day}일`;
+            document.getElementById('memoTitle').value = "";
+            document.getElementById('memoContent').value = "";
+            document.getElementById('memoRepeat').value = "none";
+
+            let foundData = null;
+            const lunarRepeat = recurringMemos.find(m => m.type === 'lunar' && m.month == lunarData.month && m.day == lunarData.day);
+            const solarRepeat = recurringMemos.find(m => m.type === 'solar' && m.month == month && m.day == day);
+
+            if (lunarRepeat) { foundData = lunarRepeat; document.getElementById('memoRepeat').value = 'lunar'; } 
+            else if (solarRepeat) { foundData = solarRepeat; document.getElementById('memoRepeat').value = 'solar'; } 
+            else {
+                const savedStr = localStorage.getItem('memo-' + selectedDateKey);
+                if (savedStr) { try { foundData = JSON.parse(savedStr); } catch(e) { foundData = { title: savedStr, content: "" }; } }
+            }
+
+            if (foundData) {
+                document.getElementById('memoTitle').value = foundData.title || "";
+                document.getElementById('memoContent').value = foundData.content || "";
+            }
+
+            document.getElementById('memoModal').dataset.lunarM = lunarData.month;
+            document.getElementById('memoModal').dataset.lunarD = lunarData.day;
+            document.getElementById('memoModal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('memoModal').style.display = 'none'; }
+
+        function saveMemo() {
+            const title = document.getElementById('memoTitle').value;
+            const content = document.getElementById('memoContent').value;
+            const repeat = document.getElementById('memoRepeat').value;
+            const lunarM = document.getElementById('memoModal').dataset.lunarM;
+            const lunarD = document.getElementById('memoModal').dataset.lunarD;
+            const [y, m, d] = selectedDateKey.split('-').map(Number);
+
+            if (title.trim() === "" && content.trim() === "") { deleteMemo(); return; }
+
+            const dataObj = { title: title, content: content };
+            localStorage.removeItem('memo-' + selectedDateKey);
+            recurringMemos = recurringMemos.filter(item => {
+                if (item.type === 'solar' && item.month == m && item.day == d) return false;
+                if (item.type === 'lunar' && item.month == lunarM && item.day == lunarD) return false;
+                return true;
+            });
+
+            if (repeat === 'none') { localStorage.setItem('memo-' + selectedDateKey, JSON.stringify(dataObj)); } 
+            else {
+                const newItem = { id: Date.now(), type: repeat, month: repeat === 'solar' ? m : lunarM, day: repeat === 'solar' ? d : lunarD, title: title, content: content };
+                recurringMemos.push(newItem);
+            }
+            localStorage.setItem('recurring-memos', JSON.stringify(recurringMemos));
+            alert("저장되었습니다!");
+            closeModal();
+            renderCalendar();
+        }
+
+        function deleteMemo() {
+            const [y, m, d] = selectedDateKey.split('-').map(Number);
+            const lunarM = document.getElementById('memoModal').dataset.lunarM;
+            const lunarD = document.getElementById('memoModal').dataset.lunarD;
+            localStorage.removeItem('memo-' + selectedDateKey);
+            recurringMemos = recurringMemos.filter(item => {
+                if (item.type === 'solar' && item.month == m && item.day == d) return false;
+                if (item.type === 'lunar' && item.month == lunarM && item.day == lunarD) return false;
+                return true;
+            });
+            localStorage.setItem('recurring-memos', JSON.stringify(recurringMemos));
+            alert("삭제되었습니다.");
+            closeModal();
+            renderCalendar();
+        }
+        
+        let touchStartX = 0; let touchEndX = 0;
+        const calendarApp = document.querySelector('.calendar-app');
+        calendarApp.addEventListener('touchstart', function(e) { touchStartX = e.changedTouches[0].screenX; });
+        calendarApp.addEventListener('touchend', function(e) { 
+            touchEndX = e.changedTouches[0].screenX; 
+            if (Math.abs(touchEndX - touchStartX) > 50) {
+                if (touchEndX < touchStartX) moveMonth(1); else moveMonth(-1);
+            }
+        });
+    </script>
+</body>
+</html>
